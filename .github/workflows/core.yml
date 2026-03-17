@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -42,22 +42,21 @@ jobs:
           java-version: 21
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Configure Gradle properties
         run: |
           echo 'android.native.buildOutput=verbose' >> ~/.gradle/gradle.properties
           echo 'org.gradle.parallel=true' >> ~/.gradle/gradle.properties
           echo 'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -XX:+UseParallelGC' >> ~/.gradle/gradle.properties
-          echo 'android.native.buildOutput=verbose' >> ~/.gradle/gradle.properties
 
       - name: Setup ninja
-        uses: seanmiddleditch/gha-setup-ninja@v6
+        uses: seanmiddleditch/gha-setup-ninja@v4
         with:
           version: 1.12.1
 
       - name: Setup ccache
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
             ~/.ccache
@@ -71,44 +70,64 @@ jobs:
 
       - name: Remove Android's cmake
         shell: bash
-        run: rm -rf $ANDROID_HOME/cmake
+        run: rm -rf "$ANDROID_HOME/cmake"
 
       - name: Build with Gradle
-        run: |
-          ./gradlew zipAll
+        run: ./gradlew zipAll
 
       - name: Prepare artifact
         if: success()
         id: prepareArtifact
+        shell: bash
         run: |
-          zygiskReleaseName=`ls zygisk/release/Vector-v*-Release.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskReleaseName=$zygiskReleaseName" >> $GITHUB_OUTPUT
-          zygiskDebugName=`ls zygisk/release/Vector-v*-Debug.zip | awk -F '(/|.zip)' '{print $3}'` && echo "zygiskDebugName=$zygiskDebugName" >> $GITHUB_OUTPUT
-          unzip zygisk/release/Vector-v*-Release.zip -d Vector-Release
-          unzip zygisk/release/Vector-v*-Debug.zip -d Vector-Debug
+          set -euo pipefail
+
+          release_zip="$(find zygisk/release -maxdepth 1 -type f -name 'Vector-v*-Release.zip' | head -n 1)"
+          debug_zip="$(find zygisk/release -maxdepth 1 -type f -name 'Vector-v*-Debug.zip' | head -n 1)"
+
+          if [ -z "${release_zip}" ] || [ -z "${debug_zip}" ]; then
+            echo "::error::Release/Debug zip not found under zygisk/release"
+            ls -la zygisk/release || true
+            exit 1
+          fi
+
+          zygiskReleaseName="$(basename "${release_zip}" .zip)"
+          zygiskDebugName="$(basename "${debug_zip}" .zip)"
+
+          echo "zygiskReleaseName=${zygiskReleaseName}" >> "$GITHUB_OUTPUT"
+          echo "zygiskDebugName=${zygiskDebugName}" >> "$GITHUB_OUTPUT"
+
+          rm -rf Vector-Release Vector-Debug
+          mkdir -p Vector-Release Vector-Debug
+          unzip -o "${release_zip}" -d Vector-Release
+          unzip -o "${debug_zip}" -d Vector-Debug
 
       - name: Upload zygisk release
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.zygiskReleaseName }}
           path: "./Vector-Release/*"
+          if-no-files-found: error
 
       - name: Upload zygisk debug
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.zygiskDebugName }}
           path: "./Vector-Debug/*"
+          if-no-files-found: error
 
       - name: Upload mappings
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: mappings
           path: |
             zygisk/build/outputs/mapping
             app/build/outputs/mapping
+          if-no-files-found: warn
 
       - name: Upload symbols
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: symbols
           path: build/symbols
-
+          if-no-files-found: warn

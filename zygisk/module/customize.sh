@@ -131,8 +131,9 @@ ui_print "- Setting permissions"
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 [ -d "$MODPATH/bin" ] && set_perm_recursive "$MODPATH/bin" 0 2000 0755 0755 u:object_r:xposed_file:s0
 
-# Keep daemon executable
+# Keep daemon/action executable
 set_perm "$MODPATH/daemon" 0 0 0755
+set_perm "$MODPATH/action.sh" 0 0 0755
 
 # IMPORTANT: zygisk libraries must be executable on some ROMs
 [ -f "$MODPATH/zygisk/armeabi-v7a.so" ] && set_perm "$MODPATH/zygisk/armeabi-v7a.so" 0 0 0755
